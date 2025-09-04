@@ -1,0 +1,70 @@
+- name: Manage Apache webserver on VM1 and VM2
+  hosts: webservers
+  become: yes
+  vars:
+    messages:
+      vm1: "Hello World from SJSU-1"
+      vm2: "Hello World from SJSU-2"
+
+  tasks:
+    - name: Install Apache
+      apt:
+        name: apache2
+        state: present
+        update_cache: yes
+      tags: deploy
+
+    - name: Ensure Apache is running
+      service:
+        name: apache2
+        state: started
+        enabled: yes
+      tags: deploy
+
+    - name: Change Apache port to 8080
+      lineinfile:
+        path: /etc/apache2/ports.conf
+        regexp: '^Listen '
+        line: 'Listen 8080'
+      notify: restart apache
+      tags: deploy
+
+    - name: Update default site to listen on 8080
+      lineinfile:
+        path: /etc/apache2/sites-available/000-default.conf
+        regexp: '^\s*<VirtualHost \*:80>'
+        line: '<VirtualHost *:8080>'
+      notify: restart apache
+      tags: deploy
+
+    - name: Create custom index.html
+      copy:
+        dest: /var/www/html/index.html
+        content: "{{ messages[inventory_hostname] }}"
+      tags: deploy
+
+    - name: Stop Apache service
+      service:
+        name: apache2
+        state: stopped
+      tags: undeploy
+
+    - name: Remove Apache package
+      apt:
+        name: apache2
+        state: absent
+        purge: yes
+      tags: undeploy
+
+    - name: Remove default web page
+      file:
+        path: /var/www/html/index.html
+        state: absent
+      tags: undeploy
+
+  handlers:
+    - name: restart apache
+      service:
+        name: apache2
+        state: restarted
+
